@@ -5,11 +5,11 @@ import struct
 import click
 import sys
 from collections import OrderedDict
+import datetime
 
 commands = {
   'connect': b'\x00\x05\x01'
 }
-
 
 def parse_package(package, debug=False):
   if debug:
@@ -18,14 +18,26 @@ def parse_package(package, debug=False):
     print(f'Package: {package}')
 
   try:
-    if len(package) == 37 and package[0] == 0xab and package[1] == 0xcd:    
+    if len(package) >= 25 and package[0] == 0xab and package[1] == 0xcd:
       float_value = struct.unpack('f', package[10:14])[0]
-      float_value2 = struct.unpack('f', package[23:27])[0]
       measurement = package[15:19].decode('ascii')
-      measurement_2 = package[27:31].decode('ascii')
+      
+      if len(package) == 37:
+        float_value2 = struct.unpack('f', package[23:27])[0]
+        measurement_2 = package[27:31].decode('ascii')
+      else:
+        float_value2 = 0
+        measurement_2 = ''
       mode_1 = package[8]
       mode_2 = package[9]
       mode_3 = package[14]
+
+      # Check checksum
+      checksum = sum(package[2:len(package) - 2]).to_bytes(2, 'little')
+      if checksum != package[len(package) - 2 : len(package)]:
+        print(f'Checksum mismatch: {checksum.hex()} != { package[len(package) - 2 : len(package)].hex()}', file=sys.stderr)
+        print(f'Package: {package}', file=sys.stderr)
+        return None
       
       data = OrderedDict([
         ('value_1', f'{float_value:.4f}'),
@@ -40,8 +52,8 @@ def parse_package(package, debug=False):
       return data
 
     else:
-      print(f'Unknown package: Length {len(package)}', file=sys.stderr)
-      print(f'Unknown package: Content {package} ({package.hex()})', file=sys.stderr)
+      print(f'Unknown package: Length: {len(package)}', file=sys.stderr)
+      print(f'Unknown package: Content: {package} ({package.hex()})', file=sys.stderr)
 
   except Exception as e:
     print(f'Error handling package: {e} | {package} | {package.hex()}', file=sys.stderr)
@@ -52,7 +64,6 @@ def send_request(device, command):
   payload_command = commands[command]
   
   start_package = b'\xab\xcd'
-  #checksum = b'\x00'
   # Create the payload part of the package
   payload_buffer = bytearray()
   payload_buffer.extend(start_package)
@@ -69,7 +80,6 @@ def send_request(device, command):
   package_buffer.extend(len(payload_buffer).to_bytes())
   package_buffer.extend(payload_buffer)
 
-  print(f'Package: {package_buffer.hex()}')
   device.write(package_buffer)
 
 def log(device, debug=False):
@@ -83,6 +93,8 @@ def log(device, debug=False):
           if (len(buf) > 0):
             data = parse_package(buf, debug)
             if (data):
+              data['#'] = package_no
+              data['timestamp'] = datetime.datetime.now().isoformat()
               if package_no == 0:
                 print(','.join(data.keys()))              
               print(','.join([str(x) for x in data.values()]))
@@ -97,6 +109,7 @@ def main(cmd):
   # parameters, this looks for the default (VID, PID) of the CP2110, which are
   # (0x10c4, 0xEA80).
   try:
+    debug = False
     d = cp2110.CP2110Device()
     d.set_uart_config(cp2110.UARTConfig(
       baud=9600,
@@ -106,13 +119,14 @@ def main(cmd):
       stop_bits=cp2110.STOP_BITS.SHORT)
     )
     d.enable_uart()
-    print(d)
-    print('Sending connect request')
+    if debug:
+      print(f'Device: {d}')
+      print('Sending connect request')
     send_request(d, 'connect')
     time.sleep(1)
     
     if cmd == 'log':
-      log(d, debug=False)
+      log(d, debug=debug)
     else:
       sys.exit('Unknown command')
 
