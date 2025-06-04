@@ -11,15 +11,16 @@ commands = {
   'connect': b'\x00\x05\x01'
 }
 
-flag_hold = 0x80
-flag_manual = 0x01
+# Flags for byte 
+flag_hold     = 0b10000000 # 0x80
+flag_manual   = 0b00000001 # 0x01
 
 def parse_measurement(measurement_as_bytes):
+  # Ohms
   # 4d 7e 00 00 | M~
   # 6b 7e 00 00 | k~
   # 7e 00 00 00 | ~
   as_ascii = measurement_as_bytes.decode('ascii')
-  print (f'{measurement_as_bytes.hex()} | {as_ascii}')
   return as_ascii
 
 
