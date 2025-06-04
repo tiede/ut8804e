@@ -24,10 +24,24 @@
 package[0:2]         start header oxab 0xcd
 package[3]           length of the following data excluding checksum
 package[4]           
-package[5]                    
+package[5]
+       0x01          
+       0x02          
+       0x04          
+       0x08          
+       0x10          
+       0x20          
+       0x40          
        0x80          hold
 package[6]           
        0x01          manual/auto
+       0x02          
+       0x04          
+       0x08          
+       0x10          
+       0x20          
+       0x40          
+       0x80          
 package[10-13]       float value - corresponds with the display
 package[15-18]       measurement type
 package[14]          mode? range?
