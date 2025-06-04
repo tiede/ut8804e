@@ -11,6 +11,18 @@ commands = {
   'connect': b'\x00\x05\x01'
 }
 
+flag_hold = 0x80
+flag_manual = 0x01
+
+def parse_measurement(measurement_as_bytes):
+  # 4d 7e 00 00 | M~
+  # 6b 7e 00 00 | k~
+  # 7e 00 00 00 | ~
+  as_ascii = measurement_as_bytes.decode('ascii')
+  print (f'{measurement_as_bytes.hex()} | {as_ascii}')
+  return as_ascii
+
+
 def parse_package(package, debug=False):
   if debug:
     print(f'Package: {len(package)} bytes')
@@ -18,42 +30,56 @@ def parse_package(package, debug=False):
     print(f'Package: {package}')
 
   try:
-    if len(package) >= 25 and package[0] == 0xab and package[1] == 0xcd:
-      float_value = struct.unpack('f', package[10:14])[0]
-      measurement = package[15:19].decode('ascii')
-      
-      if len(package) == 37:
-        float_value2 = struct.unpack('f', package[23:27])[0]
-        measurement_2 = package[27:31].decode('ascii')
-      else:
-        float_value2 = 0
-        measurement_2 = ''
-      mode_1 = package[8]
-      mode_2 = package[9]
-      mode_3 = package[14]
-
-      # Check checksum
-      checksum = sum(package[2:len(package) - 2]).to_bytes(2, 'little')
-      if checksum != package[len(package) - 2 : len(package)]:
-        print(f'Checksum mismatch: {checksum.hex()} != { package[len(package) - 2 : len(package)].hex()}', file=sys.stderr)
-        print(f'Package: {package}', file=sys.stderr)
-        return None
-      
-      data = OrderedDict([
-        ('value_1', f'{float_value:.4f}'),
-        ('measurement_1', measurement),
-        ('value_2', f'{float_value2:.4f}'),
-        ('measurement_2', measurement_2),
-        ('mode_1', mode_1),
-        ('mode_2', mode_2),
-        ('mode_3', mode_3)
-      ])
-
-      return data
-
-    else:
+    if not (package[0] == 0xab and package[1] == 0xcd):
       print(f'Unknown package: Length: {len(package)}', file=sys.stderr)
       print(f'Unknown package: Content: {package} ({package.hex()})', file=sys.stderr)
+
+      return None
+    
+    length_from_package = int(package[2])
+    if length_from_package != len(package) - 4:
+      print(f'Length mismatch: {length_from_package} != {len(package)}', file=sys.stderr)
+      return None
+
+    # Check checksum
+    checksum = sum(package[2:len(package) - 2]).to_bytes(2, 'little')
+    if checksum != package[len(package) - 2 : len(package)]:
+      print(f'Checksum mismatch: {checksum.hex()} != { package[len(package) - 2 : len(package)].hex()}', file=sys.stderr)
+      print(f'Package: {package}', file=sys.stderr)
+      return None
+
+    float_value = struct.unpack('f', package[10:14])[0]
+    measurement = parse_measurement(package[15:19]) # package[15:19].decode('ascii')
+    
+    if len(package) == 37:
+      float_value2 = struct.unpack('f', package[23:27])[0]
+      measurement_2 = parse_measurement(package[27:31]) # package[27:31].decode('ascii')
+    else:
+      float_value2 = 0
+      measurement_2 = ''
+    mode_1 = package[8]
+    mode_2 = package[9]
+    mode_3 = package[14]
+
+    hold = package[5] & flag_hold > 0
+    manual = package[6] & flag_manual > 0
+
+    properties = package[3:10]
+    
+    data = OrderedDict([
+      ('value_1', f'{float_value:.4f}'),
+      ('measurement_1', measurement),
+      ('value_2', f'{float_value2:.4f}'),
+      ('measurement_2', measurement_2),
+      ('manual', manual),
+      ('hold', hold),
+      ('mode_1', mode_1),
+      ('mode_2', mode_2),
+      ('mode_3', mode_3),
+      ('properties', properties.hex())
+    ])
+
+    return data
 
   except Exception as e:
     print(f'Error handling package: {e} | {package} | {package.hex()}', file=sys.stderr)
@@ -93,8 +119,9 @@ def log(device, debug=False):
           if (len(buf) > 0):
             data = parse_package(buf, debug)
             if (data):
-              data['#'] = package_no
+              data['#'] = f'{package_no:015}'
               data['timestamp'] = datetime.datetime.now().isoformat()
+              data.move_to_end('#', False)
               if package_no == 0:
                 print(','.join(data.keys()))              
               print(','.join([str(x) for x in data.values()]))
