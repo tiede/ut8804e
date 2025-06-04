@@ -23,6 +23,11 @@
 
 package[0:2]         start header oxab 0xcd
 package[3]           length of the following data excluding checksum
+package[4]           
+package[5]                    
+       0x80          hold
+package[6]           
+       0x01          manual/auto
 package[10-13]       float value - corresponds with the display
 package[15-18]       measurement type
 package[14]          mode? range?
