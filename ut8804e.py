@@ -11,8 +11,10 @@ commands = {
   'connect': b'\x00\x05\x01'
 }
 
-# Flags for byte 
+# Flags for byte 5
 flag_hold     = 0b10000000 # 0x80
+
+# Flags for byte 6
 flag_manual   = 0b00000001 # 0x01
 
 def parse_measurement(measurement_as_bytes):
@@ -21,8 +23,8 @@ def parse_measurement(measurement_as_bytes):
   # 6b 7e 00 00 | k~
   # 7e 00 00 00 | ~
   as_ascii = measurement_as_bytes.decode('ascii')
+  as_ascii.replace('~', 'Ω')
   return as_ascii
-
 
 def parse_package(package, debug=False):
   if debug:
