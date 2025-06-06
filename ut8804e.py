@@ -130,6 +130,19 @@ def log(device, debug=False):
             buf = bytearray()
         buf.append(b)
 
+def dump(device, debug=False):
+  buf = bytearray()
+  while (True):
+    rv = device.read(63)
+    if (len(rv) > 0):
+      for b in rv:
+        if (b == 0xab):
+          if (len(buf) > 0):
+            print(buf.hex())
+            #print(buf[9])
+            buf = bytearray()
+        buf.append(b)
+
 @click.command()
 @click.argument('cmd')
 @click.option('--debug', '-d', default=False, help='')
@@ -154,7 +167,9 @@ def main(cmd, debug):
     time.sleep(1)
     
     if cmd == 'log':
-      log(d, debug=debug)
+      log(d, debug)
+    elif cmd == 'dump':
+      dump(d, debug)
     else:
       sys.exit('Unknown command')
 
