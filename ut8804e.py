@@ -28,6 +28,11 @@ def parse_measurement(measurement_as_bytes):
   as_ascii = as_ascii.replace('~', 'Ω')
   return as_ascii
 
+def parse_flag(byte, flag):
+  if byte & flag_manual > 0:
+    return 1
+  return 0
+
 def convert_bytes_float(value_as_float):
   if len(value_as_float) != 4:
     raise Exception('Can only convert 4-bytes numbers')
@@ -76,10 +81,10 @@ def parse_package(package, debug=False):
       data['measurement_2'] = parse_measurement(package[27:31]) # package[27:31].decode('ascii')
 
     data['range'] = package[9]  
-    data['hold'] = package[5] & flag_hold > 0
-    data['manual'] = package[6] & flag_manual > 0
-    data['overload'] = package[14] & flag_overload > 0
-    data['error'] = package[6] & flag_error > 0
+    data['hold'] = parse_flag(package[5], flag_hold)
+    data['manual'] = parse_flag(package[6], flag_manual)
+    data['overload'] = parse_flag(package[14], flag_overload)
+    data['error'] = parse_flag(package[6], flag_error)
     
     data['properties'] = package[3:10].hex()
 
@@ -112,7 +117,23 @@ def send_request(device, command):
 
   device.write(package_buffer)
 
-def log(device, debug=False):
+def log(package, package_no, debug=False):
+  data = parse_package(package, debug)
+  if (data):
+    data['no_#'] = f'{package_no:015}'
+    data['timestamp'] = datetime.datetime.now().isoformat()
+    data.move_to_end('no_#', False)
+    if package_no == 0:
+      print(','.join(data.keys()))              
+    print(','.join([str(x) for x in data.values()]))
+
+def dump(package, package_no, debug=False):
+  print(f'{package_no:015} {package.hex()}')
+  #print(int.from_bytes(package[20:24], 'little' ))
+  #print(int.from_bytes(package[29:33], 'little' ))
+  #print(int.from_bytes(package[38:42], 'little' ))
+
+def read_packages(device, handler, debug=False):
   package_no = 0
   buf = bytearray()
   while (True):
@@ -121,28 +142,8 @@ def log(device, debug=False):
       for b in rv:
         if (b == 0xab):
           if (len(buf) > 0):
-            data = parse_package(buf, debug)
-            if (data):
-              data['#'] = f'{package_no:015}'
-              data['timestamp'] = datetime.datetime.now().isoformat()
-              data.move_to_end('#', False)
-              if package_no == 0:
-                print(','.join(data.keys()))              
-              print(','.join([str(x) for x in data.values()]))
-              package_no += 1
-            buf = bytearray()
-        buf.append(b)
-
-def dump(device, debug=False):
-  buf = bytearray()
-  while (True):
-    rv = device.read(63)
-    if (len(rv) > 0):
-      for b in rv:
-        if (b == 0xab):
-          if (len(buf) > 0):
-            print(buf.hex())
-            #print(buf[9])
+            handler(buf, package_no, debug)
+            package_no += 1
             buf = bytearray()
         buf.append(b)
 
@@ -170,9 +171,9 @@ def main(cmd, debug):
     time.sleep(1)
     
     if cmd == 'log':
-      log(d, debug)
+      read_packages(d, log, debug)
     elif cmd == 'dump':
-      dump(d, debug)
+      read_packages(d, dump, debug)
     else:
       sys.exit('Unknown command')
 
