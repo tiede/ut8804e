@@ -70,9 +70,21 @@ def parse_package(package, debug=False):
     if (package[5] & flag_max_min):
       data['value_1'] = convert_bytes_float(package[10:14])
       data['measurement_1'] = parse_measurement(package[42:46])
+      
       data['max'] = convert_bytes_float(package[15:19])
+      max_seconds = int.from_bytes(package[20:24], 'little')
+      data['max_seconds'] = max_seconds
+      data['max_time'] = datetime.timedelta(seconds=max_seconds)
+      
       data['avg'] = convert_bytes_float(package[24:28])
+      avg_seconds = int.from_bytes(package[29:33], 'little')
+      data['avg_seconds'] = avg_seconds
+      data['avg_time'] = datetime.timedelta(seconds=avg_seconds)
+      
       data['min'] = convert_bytes_float(package[33:37])
+      min_seconds = int.from_bytes(package[38:42], 'little')
+      data['min_seconds'] = min_seconds
+      data['min_time'] = datetime.timedelta(seconds=min_seconds)
     else:
       data['value_1'] = convert_bytes_float(package[10:14])
       data['measurement_1'] = parse_measurement(package[15:19]) # package[15:19].decode('ascii')
@@ -128,10 +140,7 @@ def log(package, package_no, debug=False):
     print(','.join([str(x) for x in data.values()]))
 
 def dump(package, package_no, debug=False):
-  print(f'{package_no:015} {package.hex()}')
-  #print(int.from_bytes(package[20:24], 'little' ))
-  #print(int.from_bytes(package[29:33], 'little' ))
-  #print(int.from_bytes(package[38:42], 'little' ))
+  print(f'{package_no:015} | {package.hex()}')
 
 def read_packages(device, handler, debug=False):
   package_no = 0
