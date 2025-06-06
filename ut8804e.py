@@ -138,9 +138,13 @@ def log(package, package_no, debug=False):
     if package_no == 0:
       print(','.join(data.keys()))              
     print(','.join([str(x) for x in data.values()]))
+    return True
+  
+  return False
 
-def dump(package, package_no, debug=False):
+def dump(package, package_no, debug):
   print(f'{package_no:015} | {package.hex()}')
+  return True
 
 def read_packages(device, handler, debug=False):
   package_no = 0
@@ -151,8 +155,8 @@ def read_packages(device, handler, debug=False):
       for b in rv:
         if (b == 0xab):
           if (len(buf) > 0):
-            handler(buf, package_no, debug)
-            package_no += 1
+            if (handler(buf, package_no, debug)):
+              package_no += 1
             buf = bytearray()
         buf.append(b)
 
