@@ -13,18 +13,26 @@ commands = {
 
 # Flags for byte 5
 flag_hold     = 0b10000000 # 0x80
+flag_max_min  = 0b00100000 # 0x20
 
 # Flags for byte 6
 flag_manual   = 0b00000001 # 0x01
 
+# Flags for byte 14
+flag_overload = 0b00000001 # 0x01
+
 def parse_measurement(measurement_as_bytes):
-  # Ohms
-  # 4d 7e 00 00 | M~
-  # 6b 7e 00 00 | k~
-  # 7e 00 00 00 | ~
+  # Ohms (omega) is represented as thilde
   as_ascii = measurement_as_bytes.decode('ascii')
-  as_ascii.replace('~', 'Ω')
+  as_ascii = as_ascii.replace('~', 'Ω')
   return as_ascii
+
+def convert_bytes_float(value_as_float):
+  if len(value_as_float) != 4:
+    raise Exception('Can only convert 4-bytes numbers')
+
+  float_value = struct.unpack('f', value_as_float)[0]
+  return f'{float_value:.4f}'
 
 def parse_package(package, debug=False):
   if debug:
@@ -51,36 +59,26 @@ def parse_package(package, debug=False):
       print(f'Package: {package}', file=sys.stderr)
       return None
 
-    float_value = struct.unpack('f', package[10:14])[0]
-    measurement = parse_measurement(package[15:19]) # package[15:19].decode('ascii')
-    
-    if len(package) == 37:
-      float_value2 = struct.unpack('f', package[23:27])[0]
-      measurement_2 = parse_measurement(package[27:31]) # package[27:31].decode('ascii')
+    data = OrderedDict()
+
+    if (package[5] & flag_max_min):
+      data['value_1'] = convert_bytes_float(package[10:14])
+      data['measurement_1'] = parse_measurement(package[42:46])
+      data['max'] = convert_bytes_float(package[15:19])
+      data['avg'] = convert_bytes_float(package[24:28])
+      data['min'] = convert_bytes_float(package[33:37])
     else:
-      float_value2 = 0
-      measurement_2 = ''
-    mode_1 = package[8]
-    mode_2 = package[9]
-    mode_3 = package[14]
-
-    hold = package[5] & flag_hold > 0
-    manual = package[6] & flag_manual > 0
-
-    properties = package[3:10]
+      data['value_1'] = convert_bytes_float(package[10:14])
+      data['measurement_1'] = parse_measurement(package[15:19]) # package[15:19].decode('ascii')
+      
+      data['value_2'] = convert_bytes_float(package[23:27])
+      data['measurement_2'] = parse_measurement(package[27:31]) # package[27:31].decode('ascii')
+      
+    data['hold'] = package[5] & flag_hold > 0
+    data['manual'] = package[6] & flag_manual > 0
+    data['overload'] = package[14] & flag_overload > 0
     
-    data = OrderedDict([
-      ('value_1', f'{float_value:.4f}'),
-      ('measurement_1', measurement),
-      ('value_2', f'{float_value2:.4f}'),
-      ('measurement_2', measurement_2),
-      ('manual', manual),
-      ('hold', hold),
-      ('mode_1', mode_1),
-      ('mode_2', mode_2),
-      ('mode_3', mode_3),
-      ('properties', properties.hex())
-    ])
+    data['properties'] = package[3:10].hex()
 
     return data
 
@@ -133,13 +131,13 @@ def log(device, debug=False):
         buf.append(b)
 
 @click.command()
-@click.argument("cmd")
-def main(cmd):
+@click.argument('cmd')
+@click.option('--debug', '-d', default=False, help='')
+def main(cmd, debug):
   # This will raise an exception if a device is not found. Called with no
   # parameters, this looks for the default (VID, PID) of the CP2110, which are
   # (0x10c4, 0xEA80).
   try:
-    debug = False
     d = cp2110.CP2110Device()
     d.set_uart_config(cp2110.UARTConfig(
       baud=9600,
