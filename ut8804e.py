@@ -17,6 +17,7 @@ flag_max_min  = 0b00100000 # 0x20
 
 # Flags for byte 6
 flag_manual   = 0b00000001 # 0x01
+flag_error = 0b00001000 # 0x08
 
 # Flags for byte 14
 flag_overload = 0b00000001 # 0x01
@@ -77,6 +78,7 @@ def parse_package(package, debug=False):
     data['hold'] = package[5] & flag_hold > 0
     data['manual'] = package[6] & flag_manual > 0
     data['overload'] = package[14] & flag_overload > 0
+    data['error'] = package[6] & flag_error > 0
     
     data['properties'] = package[3:10].hex()
 
