@@ -10,7 +10,7 @@
 ## Trying to decode
                                     -- Value --                      -- Value -- 
        0001 02 03 04 05 06 07 08 09 10 11 12 13 14 15161718 19202122 23 24 25 26 272829 3031323334 34 35 36
-                                                    V D C                         V D C
+                                    -- Value --     V D C            -- Value --  V D C
 19.538 abcd 21 00 02 08 01 10 31 02 d3 4d 9c 41 30 56444300 00000000 d4 95 9c 41 56444300 00000000 9c 06
 19.540 abcd 21 00 02 08 01 10 31 02 ec 51 9c 41 30 56444300 00000000 d4 95 9c 41 56444300 00000000 b9 06
 18.540 abcd 21 00 02 08 01 10 31 02 ec 51 94 41 30 56444300 00000000 a2 98 94 41 56444300 00000000 7a 06
@@ -21,32 +21,41 @@
        abcd 21 00 02 08 01 10 41 02 8f 82 d7 43 20 6d564443 00000000 55 02 d8 43 6d564443 00000000 d0 06
 
 
-package[0:2]         start header oxab 0xcd
-package[3]           length of the following data excluding checksum
-package[4]           
+package[0-1]         start header oxab 0xcd
+package[2]           length of the following data excluding checksum
+package[3-4]          
 package[5]
        0x01          
        0x02          
        0x04          
        0x08          
        0x10          
-       0x20          
+       0x20          max/min
        0x40          
        0x80          hold
 package[6]           
        0x01          manual/auto
        0x02          
        0x04          
-       0x08          
+       0x08          error
        0x10          
        0x20          
        0x40          
-       0x80          
+       0x80
+package[8]           mode?
+package[9]           range
 package[10-13]       float value - corresponds with the display
+package[14]          mode?
+       0x01          overload
+       0x02
+       0x04
+       0x08
+       0x10
+       0x20
+       0x40
+       0x80
 package[15-18]       measurement type
-package[14]          mode? range?
-package[8]           mode? range?
-package[9]           mode? range?
+ 
 
 package[23-26]       float value 2
 package[27-30]       measurement type 2
