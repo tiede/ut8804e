@@ -74,7 +74,8 @@ def parse_package(package, debug=False):
       
       data['value_2'] = convert_bytes_float(package[23:27])
       data['measurement_2'] = parse_measurement(package[27:31]) # package[27:31].decode('ascii')
-      
+
+    data['range'] = package[9]  
     data['hold'] = package[5] & flag_hold > 0
     data['manual'] = package[6] & flag_manual > 0
     data['overload'] = package[14] & flag_overload > 0
