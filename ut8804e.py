@@ -8,7 +8,8 @@ from collections import OrderedDict
 import datetime
 
 commands = {
-  'connect': b'\x00\x05\x01'
+  'connect': b'\x00\x05\x01',
+  'disconnect': b'\x00\x05\x00'
 }
 
 # Flags for byte 5
@@ -193,4 +194,6 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        pass
+      if d:
+        print('Sending disconnect request', file=sys.stderr)
+        send_request(d, 'disconnect')
