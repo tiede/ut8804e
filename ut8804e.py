@@ -157,8 +157,8 @@ def read_packages(device, handler, debug=False):
         buf.append(b)
 
 @click.command()
-@click.argument('cmd')
-@click.option('--debug', '-d', default=False, help='')
+@click.argument('cmd', required=True, type=click.Choice(['log', 'dump']))
+@click.option('--debug', '-d', default=False)
 def main(cmd, debug):
   # This will raise an exception if a device is not found. Called with no
   # parameters, this looks for the default (VID, PID) of the CP2110, which are
