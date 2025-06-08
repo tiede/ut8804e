@@ -29,7 +29,7 @@ def parse_measurement(measurement_as_bytes):
   return as_ascii
 
 def parse_flag(byte, flag):
-  if byte & flag_manual > 0:
+  if byte & flag > 0:
     return 1
   return 0
 
