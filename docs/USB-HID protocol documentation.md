@@ -21,6 +21,7 @@
        abcd 21 00 02 08 01 10 41 02 8f 82 d7 43 20 6d564443 00000000 55 02 d8 43 6d564443 00000000 d0 06
 
 
+
 package[0-1]         start header oxab 0xcd
 package[2]           length of the following data excluding checksum
 package[3-4]          
@@ -42,7 +43,8 @@ package[6]
        0x20          
        0x40          
        0x80
-package[8]           mode?
+package[7]           always 0x10?
+package[8]           
 package[9]           range
 package[10-13]       float value - corresponds with the display
 package[14]          mode?
