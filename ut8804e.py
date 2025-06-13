@@ -151,7 +151,7 @@ class UT8804e:
     
     return False
 
-  def dump_handler(package, package_no, debug):
+  def dump_handler(self, package, package_no, debug):
     print(f'{package_no:015} | {package.hex()}')
     return True
 
@@ -159,6 +159,7 @@ class UT8804e:
     package_no = 0
     buf = bytearray()
     while (True):
+      #print('Reading from device')
       rv = self.device.read(63)
       if (len(rv) > 0):
         for b in rv:
@@ -170,15 +171,16 @@ class UT8804e:
           buf.append(b)
 
   def log(self, debug):
-    self.read_packages(self.device, self.log_handler, debug)
+    self.read_packages(self.log_handler, debug)
 
   def dump(self, debug):
-    self.read_packages(self.device, self.dump_handler, debug)
+    self.read_packages(self.dump_handler, debug)
 
   def connect(self, debug=False):
     # This will raise an exception if a device is not found. Called with no
     # parameters, this looks for the default (VID, PID) of the CP2110, which are
     # (0x10c4, 0xEA80).
+    print('Connecting')
     try:
       self.device = cp2110.CP2110Device()
       self.device.set_uart_config(cp2110.UARTConfig(
@@ -191,6 +193,10 @@ class UT8804e:
       self.device.enable_uart()
       if debug:
         print(f'Device: {self.device}')
+
+      self.send_request(self.device, 'connect')
+
+      time.sleep(1)
     except Exception as e:
       print(f'Exception: {e}', file=sys.stderr)
       print(traceback.format_exc(), file=sys.stderr)
@@ -205,7 +211,7 @@ def main(cmd, debug):
   meter = UT8804e()
   
   try:
-    meter.connect()
+    meter.connect(debug)
 
     if cmd == 'log':
         meter.log(debug)
