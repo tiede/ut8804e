@@ -1,3 +1,4 @@
+from statistics import stdev
 import cp2110
 import time
 import traceback
@@ -7,6 +8,20 @@ import sys
 from collections import OrderedDict
 import datetime
 
+class RunningAverage():
+  def __init__(self):
+    self.average = 0
+    self.n = 0
+    
+  def __call__(self, new_value):
+    self.n += 1
+    self.average = (self.average * (self.n-1) + new_value) / self.n 
+    
+  def __float__(self):
+    return self.average
+
+  def __repr__(self):
+    return f'{self.average:.4f}'
 
 class UT8804e:
   """
@@ -50,21 +65,22 @@ class UT8804e:
     float_value = struct.unpack('f', value_as_float)[0]
     return f'{float_value:.4f}'
   
-  
-
-  @staticmethod
-  def add_measurement(value_bytes, duration_bytes, data, measurement_name):
-    data[measurement_name] = UT8804e.convert_bytes_float(value_bytes)
+  def add_measurement(self, value_bytes, duration_bytes, measurement_name):
+    self.__current_data[measurement_name] = UT8804e.convert_bytes_float(value_bytes)
     seconds = int.from_bytes(duration_bytes, 'little')
-    data[measurement_name + '_seconds'] = seconds
-    data[measurement_name + '_time'] = datetime.timedelta(seconds=seconds)
+    self.__current_data[measurement_name + '_seconds'] = seconds
+    self.__current_data[measurement_name + '_time'] = datetime.timedelta(seconds=seconds)
 
   def __init__(self, debug=False):
-    self.device = None
-    self.debug = debug
+    self.__device = None
+    self.__debug = debug
+    self.__current_data = None
+    self.__package_no = 0
+    self.__packages = []
+    self.__measurements = {}
 
   def parse_package(self, package):
-    if self.debug:
+    if self.__debug:
       print(f'Package: {len(package)} bytes', file=sys.stderr)
       print(f'Package hex: {package.hex()}', file=sys.stderr)
       print(f'Package: {package}', file=sys.stderr)
@@ -74,12 +90,12 @@ class UT8804e:
         print(f'Unknown package: Length: {len(package)}', file=sys.stderr)
         print(f'Unknown package: Content: {package} ({package.hex()})', file=sys.stderr)
 
-        return None
+        return False
       
       length_from_package = int(package[2])
       if length_from_package != len(package) - 4:
         print(f'Length mismatch: {length_from_package} != {len(package)}', file=sys.stderr)
-        return None
+        return False
 
       # Check checksum
       checksum = sum(package[2:len(package) - 2]).to_bytes(2, 'little')
@@ -88,36 +104,43 @@ class UT8804e:
         print(f'Package: {package}', file=sys.stderr)
         return None
 
-      data = OrderedDict()
+      if (self.__current_data):
+        self.__packages.append(self.__current_data)
+        if (self.__debug):
+          print(f'Stored {len(self.__packages)} packages', file=sys.stderr)
+      
+      self.__current_data = OrderedDict()
+      self.__current_data['no_#'] = f'{self.__package_no:015}'
 
       if (package[5] & self.flag_max_min):
-        data['value_1'] = UT8804e.convert_bytes_float(package[10:14])
-        data['measurement_1'] = UT8804e.parse_measurement(package[42:46])
+        self.__current_data['value_1'] = UT8804e.convert_bytes_float(package[10:14])
+        self.__current_data['measurement_1'] = UT8804e.parse_measurement(package[42:46])
         
-        self.add_measurement(package[15:19], package[20:24], data, 'max')
-        self.add_measurement(package[24:28], package[29:33], data, 'avg')
-        self.add_measurement(package[33:37], package[38:42], data, 'min')
+        self.add_measurement(package[15:19], package[20:24], 'max')
+        self.add_measurement(package[24:28], package[29:33], 'avg')
+        self.add_measurement(package[33:37], package[38:42], 'min')
       else:
-        data['value_1'] = UT8804e.convert_bytes_float(package[10:14])
-        data['measurement_1'] = UT8804e.parse_measurement(package[15:19]) # package[15:19].decode('ascii')
+        self.__current_data['value_1'] = UT8804e.convert_bytes_float(package[10:14])
+        self.__current_data['measurement_1'] = UT8804e.parse_measurement(package[15:19]) # package[15:19].decode('ascii')
         
-        data['value_2'] = UT8804e.convert_bytes_float(package[23:27])
-        data['measurement_2'] = UT8804e.parse_measurement(package[27:31]) # package[27:31].decode('ascii')
+        self.__current_data['value_2'] = UT8804e.convert_bytes_float(package[23:27])
+        self.__current_data['measurement_2'] = UT8804e.parse_measurement(package[27:31]) # package[27:31].decode('ascii')
 
-      data['range'] = package[9]  
-      data['hold'] = UT8804e.parse_flag(package[5], self.flag_hold)
-      data['manual'] = UT8804e.parse_flag(package[6], self.flag_manual)
-      data['overload'] = UT8804e.parse_flag(package[14], self.flag_overload)
-      data['error'] = UT8804e.parse_flag(package[6], self.flag_error)
+      self.__current_data['range'] = package[9]  
+      self.__current_data['hold'] = UT8804e.parse_flag(package[5], self.flag_hold)
+      self.__current_data['manual'] = UT8804e.parse_flag(package[6], self.flag_manual)
+      self.__current_data['overload'] = UT8804e.parse_flag(package[14], self.flag_overload)
+      self.__current_data['error'] = UT8804e.parse_flag(package[6], self.flag_error)
       
-      data['properties'] = package[3:10].hex()
+      self.__current_data['properties'] = package[3:10].hex()
 
-      return data
+      self.__current_data['timestamp'] = datetime.datetime.now().isoformat()
+
+      return True
 
     except Exception as e:
       print(f'Error handling package: {e} | {package} | {package.hex()}', file=sys.stderr)
-    
-    return None
+      return False
 
   def send_request(self, device, command):
     payload_command = self.commands[command]
@@ -141,35 +164,56 @@ class UT8804e:
 
     device.write(package_buffer)
 
-  def log_handler(self, package, package_no):
-    data = self.parse_package(package)
-    if (data):
-      data['no_#'] = f'{package_no:015}'
-      data['timestamp'] = datetime.datetime.now().isoformat()
-      data.move_to_end('no_#', False)
-      if package_no == 0:
-        print(','.join(data.keys()))
-      print(','.join([str(x) for x in data.values()]))
+  def log_handler(self, package):
+    result = self.parse_package(package)
+    if (result):
+      if self.__package_no == 0:
+        print(','.join(self.__current_data.keys()))
+      print(','.join([str(x) for x in self.__current_data.values()]))
       return True
     
     return False
 
-  def dump_handler(self, package, package_no):
-    print(f'{package_no:015} | {package.hex()}')
+  def dump_handler(self, package):
+    print(f'{self.__package_no:015} | {package.hex()}')
     return True
+  
+  def stat_handler(self, package):
+    result = self.parse_package(package)
+    if (result):
+      if (self.__measurements.get('min')):
+        prior_min = self.__measurements['min']
+        if (self.__current_data['value_1'] < prior_min):
+          self.__measurements['min'] = self.__current_data['value_1']
+      else:
+        self.__measurements['min'] = self.__current_data['value_1']
+
+      if (self.__measurements.get('max')):
+        prior_max = self.__measurements['max']
+        if (self.__current_data['value_1'] > prior_max):
+          self.__measurements['max'] = self.__current_data['value_1']
+      else:
+        self.__measurements['max'] = self.__current_data['value_1']
+  
+      if (self.__measurements.get('avg')):
+        self.__measurements['avg'](float(self.__current_data['value_1']))
+      else:
+        self.__measurements['avg'] = RunningAverage()
+        self.__measurements['avg'](float(self.__current_data['value_1']))
+
+      print(f'Read: {self.__current_data["value_1"]}, Min: {self.__measurements["min"]}, Max: {self.__measurements["max"]}, Avg: {self.__measurements["avg"]}')
+      return True
 
   def read_packages(self, handler):
-    package_no = 0
     buf = bytearray()
     while (True):
-      #print('Reading from device')
-      rv = self.device.read(63)
+      rv = self.__device.read(63)
       if (len(rv) > 0):
         for b in rv:
           if (b == 0xab):
             if (len(buf) > 0):
-              if (handler(buf, package_no)):
-                package_no += 1
+              if (handler(buf)):
+                self.__package_no += 1
               buf = bytearray()
           buf.append(b)
 
@@ -179,25 +223,28 @@ class UT8804e:
   def dump(self):
     self.read_packages(self.dump_handler)
 
+  def stats(self):
+    self.read_packages(self.stat_handler)
+
   def connect(self):
     # This will raise an exception if a device is not found. Called with no
     # parameters, this looks for the default (VID, PID) of the CP2110, which are
     # (0x10c4, 0xEA80).
     print('Connecting', file=sys.stderr)
     try:
-      self.device = cp2110.CP2110Device()
-      self.device.set_uart_config(cp2110.UARTConfig(
+      self.__device = cp2110.CP2110Device()
+      self.__device.set_uart_config(cp2110.UARTConfig(
         baud=9600,
         parity=cp2110.PARITY.NONE,
         flow_control=cp2110.FLOW_CONTROL.DISABLED,
         data_bits=cp2110.DATA_BITS.EIGHT,
         stop_bits=cp2110.STOP_BITS.SHORT)
       )
-      self.device.enable_uart()
-      if self.debug:
-        print(f'Device: {self.device}', file=sys.stderr)
+      self.__device.enable_uart()
+      if self.__debug:
+        print(f'Device: {self.__device}', file=sys.stderr)
 
-      self.send_request(self.device, 'connect')
+      self.send_request(self.__device, 'connect')
 
       time.sleep(1)
     except Exception as e:
@@ -205,10 +252,10 @@ class UT8804e:
       print(traceback.format_exc(), file=sys.stderr)
 
   def disconnect(self):
-    self.send_request(self.device, 'disconnect')
+    self.send_request(self.__device, 'disconnect')
 
 @click.command()
-@click.argument('cmd', required=True, type=click.Choice(['log', 'dump']))
+@click.argument('cmd', required=True, type=click.Choice(['log', 'dump', 'stats']))
 @click.option('--debug', '-d', is_flag=True)
 def main(cmd, debug):
   meter = UT8804e(debug)
@@ -220,6 +267,8 @@ def main(cmd, debug):
         meter.log()
     elif cmd == 'dump':
       meter.dump()
+    elif cmd == 'stats':
+      meter.stats()
     else:
       sys.exit('Unknown command')
   except KeyboardInterrupt:
