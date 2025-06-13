@@ -50,8 +50,7 @@ class UT8804e:
     float_value = struct.unpack('f', value_as_float)[0]
     return f'{float_value:.4f}'
   
-  def __init__(self):
-    self.device = None
+  
 
   @staticmethod
   def add_measurement(value_bytes, duration_bytes, data, measurement_name):
@@ -60,8 +59,12 @@ class UT8804e:
     data[measurement_name + '_seconds'] = seconds
     data[measurement_name + '_time'] = datetime.timedelta(seconds=seconds)
 
-  def parse_package(self, package, debug=False):
-    if debug:
+  def __init__(self, debug=False):
+    self.device = None
+    self.debug = debug
+
+  def parse_package(self, package):
+    if self.debug:
       print(f'Package: {len(package)} bytes', file=sys.stderr)
       print(f'Package hex: {package.hex()}', file=sys.stderr)
       print(f'Package: {package}', file=sys.stderr)
@@ -138,8 +141,8 @@ class UT8804e:
 
     device.write(package_buffer)
 
-  def log_handler(self, package, package_no, debug):
-    data = self.parse_package(package, debug)
+  def log_handler(self, package, package_no):
+    data = self.parse_package(package)
     if (data):
       data['no_#'] = f'{package_no:015}'
       data['timestamp'] = datetime.datetime.now().isoformat()
@@ -151,11 +154,11 @@ class UT8804e:
     
     return False
 
-  def dump_handler(self, package, package_no, debug):
+  def dump_handler(self, package, package_no):
     print(f'{package_no:015} | {package.hex()}')
     return True
 
-  def read_packages(self, handler, debug=False):
+  def read_packages(self, handler):
     package_no = 0
     buf = bytearray()
     while (True):
@@ -165,18 +168,18 @@ class UT8804e:
         for b in rv:
           if (b == 0xab):
             if (len(buf) > 0):
-              if (handler(buf, package_no, debug)):
+              if (handler(buf, package_no)):
                 package_no += 1
               buf = bytearray()
           buf.append(b)
 
-  def log(self, debug):
-    self.read_packages(self.log_handler, debug)
+  def log(self):
+    self.read_packages(self.log_handler)
 
-  def dump(self, debug):
-    self.read_packages(self.dump_handler, debug)
+  def dump(self):
+    self.read_packages(self.dump_handler)
 
-  def connect(self, debug=False):
+  def connect(self):
     # This will raise an exception if a device is not found. Called with no
     # parameters, this looks for the default (VID, PID) of the CP2110, which are
     # (0x10c4, 0xEA80).
@@ -191,7 +194,7 @@ class UT8804e:
         stop_bits=cp2110.STOP_BITS.SHORT)
       )
       self.device.enable_uart()
-      if debug:
+      if self.debug:
         print(f'Device: {self.device}', file=sys.stderr)
 
       self.send_request(self.device, 'connect')
@@ -208,15 +211,15 @@ class UT8804e:
 @click.argument('cmd', required=True, type=click.Choice(['log', 'dump']))
 @click.option('--debug', '-d', default=False)
 def main(cmd, debug):
-  meter = UT8804e()
+  meter = UT8804e(debug)
   
   try:
-    meter.connect(debug)
+    meter.connect()
 
     if cmd == 'log':
-        meter.log(debug)
+        meter.log()
     elif cmd == 'dump':
-      meter.dump(debug)
+      meter.dump()
     else:
       sys.exit('Unknown command')
   except KeyboardInterrupt:
