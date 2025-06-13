@@ -7,193 +7,211 @@ import sys
 from collections import OrderedDict
 import datetime
 
-commands = {
-  'connect': b'\x00\x05\x01',
-  'disconnect': b'\x00\x05\x00'
-}
 
-# Flags for byte 5
-flag_hold     = 0b10000000 # 0x80
-flag_max_min  = 0b00100000 # 0x20
+class UT8804e:
+  """
+  Represents a UT8804e multimeter connected via a CP2110 USB-to-UART bridge.
+  """
 
-# Flags for byte 6
-flag_manual   = 0b00000001 # 0x01
-flag_error = 0b00001000 # 0x08
+  commands = {
+    'connect': b'\x00\x05\x01',
+    'disconnect': b'\x00\x05\x00'
+  }
 
-# Flags for byte 14
-flag_overload = 0b00000001 # 0x01
+  # Flags for byte 5
+  flag_hold     = 0b10000000 # 0x80
+  flag_max_min  = 0b00100000 # 0x20
 
-def parse_measurement(measurement_as_bytes):
-  # Ohms (omega) is represented as thilde
-  as_ascii = measurement_as_bytes.decode('ascii')
-  as_ascii = as_ascii.replace('~', 'Ω')
-  return as_ascii
+  # Flags for byte 6
+  flag_manual   = 0b00000001 # 0x01
+  flag_error = 0b00001000 # 0x08
 
-def parse_flag(byte, flag):
-  if byte & flag > 0:
-    return 1
-  return 0
+  # Flags for byte 14
+  flag_overload = 0b00000001 # 0x01
 
-def convert_bytes_float(value_as_float):
-  if len(value_as_float) != 4:
-    raise Exception('Can only convert 4-bytes numbers')
+  @staticmethod
+  def parse_measurement(measurement_as_bytes):
+    # Ohms (omega) is represented as thilde
+    as_ascii = measurement_as_bytes.decode('ascii')
+    as_ascii = as_ascii.replace('~', 'Ω')
+    return as_ascii
 
-  float_value = struct.unpack('f', value_as_float)[0]
-  return f'{float_value:.4f}'
+  @staticmethod
+  def parse_flag(byte, flag):
+    if byte & flag > 0:
+      return 1
+    return 0
 
-def add_measurement(value_bytes, duration_bytes, data, measurement_name):
-  data[measurement_name] = convert_bytes_float(value_bytes)
-  seconds = int.from_bytes(duration_bytes, 'little')
-  data[measurement_name + '_seconds'] = seconds
-  data[measurement_name + '_time'] = datetime.timedelta(seconds=seconds)
+  @staticmethod
+  def convert_bytes_float(value_as_float):
+    if len(value_as_float) != 4:
+      raise Exception('Can only convert 4-bytes numbers')
 
-def parse_package(package, debug=False):
-  if debug:
-    print(f'Package: {len(package)} bytes')
-    print(f'Package hex: {package.hex()}')
-    print(f'Package: {package}')
+    float_value = struct.unpack('f', value_as_float)[0]
+    return f'{float_value:.4f}'
 
-  try:
-    if not (package[0] == 0xab and package[1] == 0xcd):
-      print(f'Unknown package: Length: {len(package)}', file=sys.stderr)
-      print(f'Unknown package: Content: {package} ({package.hex()})', file=sys.stderr)
+  def add_measurement(value_bytes, duration_bytes, data, measurement_name):
+    data[measurement_name] = UT8804e.convert_bytes_float(value_bytes)
+    seconds = int.from_bytes(duration_bytes, 'little')
+    data[measurement_name + '_seconds'] = seconds
+    data[measurement_name + '_time'] = datetime.timedelta(seconds=seconds)
 
-      return None
-    
-    length_from_package = int(package[2])
-    if length_from_package != len(package) - 4:
-      print(f'Length mismatch: {length_from_package} != {len(package)}', file=sys.stderr)
-      return None
+  def parse_package(self, package, debug=False):
+    if debug:
+      print(f'Package: {len(package)} bytes')
+      print(f'Package hex: {package.hex()}')
+      print(f'Package: {package}')
 
-    # Check checksum
-    checksum = sum(package[2:len(package) - 2]).to_bytes(2, 'little')
-    if checksum != package[len(package) - 2 : len(package)]:
-      print(f'Checksum mismatch: {checksum.hex()} != { package[len(package) - 2 : len(package)].hex()}', file=sys.stderr)
-      print(f'Package: {package}', file=sys.stderr)
-      return None
+    try:
+      if not (package[0] == 0xab and package[1] == 0xcd):
+        print(f'Unknown package: Length: {len(package)}', file=sys.stderr)
+        print(f'Unknown package: Content: {package} ({package.hex()})', file=sys.stderr)
 
-    data = OrderedDict()
-
-    if (package[5] & flag_max_min):
-      data['value_1'] = convert_bytes_float(package[10:14])
-      data['measurement_1'] = parse_measurement(package[42:46])
+        return None
       
-      add_measurement(package[15:19], package[20:24], data, 'max')
-      add_measurement(package[24:28], package[29:33], data, 'avg')
-      add_measurement(package[33:37], package[38:42], data, 'min')
-    else:
-      data['value_1'] = convert_bytes_float(package[10:14])
-      data['measurement_1'] = parse_measurement(package[15:19]) # package[15:19].decode('ascii')
+      length_from_package = int(package[2])
+      if length_from_package != len(package) - 4:
+        print(f'Length mismatch: {length_from_package} != {len(package)}', file=sys.stderr)
+        return None
+
+      # Check checksum
+      checksum = sum(package[2:len(package) - 2]).to_bytes(2, 'little')
+      if checksum != package[len(package) - 2 : len(package)]:
+        print(f'Checksum mismatch: {checksum.hex()} != { package[len(package) - 2 : len(package)].hex()}', file=sys.stderr)
+        print(f'Package: {package}', file=sys.stderr)
+        return None
+
+      data = OrderedDict()
+
+      if (package[5] & self.flag_max_min):
+        data['value_1'] = UT8804e.convert_bytes_float(package[10:14])
+        data['measurement_1'] = UT8804e.parse_measurement(package[42:46])
+        
+        self.add_measurement(package[15:19], package[20:24], data, 'max')
+        self.add_measurement(package[24:28], package[29:33], data, 'avg')
+        self.add_measurement(package[33:37], package[38:42], data, 'min')
+      else:
+        data['value_1'] = UT8804e.convert_bytes_float(package[10:14])
+        data['measurement_1'] = UT8804e.parse_measurement(package[15:19]) # package[15:19].decode('ascii')
+        
+        data['value_2'] = UT8804e.convert_bytes_float(package[23:27])
+        data['measurement_2'] = UT8804e.parse_measurement(package[27:31]) # package[27:31].decode('ascii')
+
+      data['range'] = package[9]  
+      data['hold'] = UT8804e.parse_flag(package[5], self.flag_hold)
+      data['manual'] = UT8804e.parse_flag(package[6], self.flag_manual)
+      data['overload'] = UT8804e.parse_flag(package[14], self.flag_overload)
+      data['error'] = UT8804e.parse_flag(package[6], self.flag_error)
       
-      data['value_2'] = convert_bytes_float(package[23:27])
-      data['measurement_2'] = parse_measurement(package[27:31]) # package[27:31].decode('ascii')
+      data['properties'] = package[3:10].hex()
 
-    data['range'] = package[9]  
-    data['hold'] = parse_flag(package[5], flag_hold)
-    data['manual'] = parse_flag(package[6], flag_manual)
-    data['overload'] = parse_flag(package[14], flag_overload)
-    data['error'] = parse_flag(package[6], flag_error)
+      return data
+
+    except Exception as e:
+      print(f'Error handling package: {e} | {package} | {package.hex()}', file=sys.stderr)
     
-    data['properties'] = package[3:10].hex()
+    return None
 
-    return data
+  def send_request(self, device, command):
+    payload_command = self.commands[command]
+    
+    start_package = b'\xab\xcd'
+    # Create the payload part of the package
+    payload_buffer = bytearray()
+    payload_buffer.extend(start_package)
+    # We add 1 to the length of the command to include this byte
+    payload_length = (len(payload_command) + 1).to_bytes()
+    payload_buffer.extend(payload_length)
+    payload_buffer.extend(payload_command)
+    
+    checksum = sum(payload_length + payload_command).to_bytes(2, 'little')
+    payload_buffer.extend(checksum)
 
-  except Exception as e:
-    print(f'Error handling package: {e} | {package} | {package.hex()}', file=sys.stderr)
-  
-  return None
+    # Create the complete package
+    package_buffer = bytearray()
+    package_buffer.extend(len(payload_buffer).to_bytes())
+    package_buffer.extend(payload_buffer)
 
-def send_request(device, command):
-  payload_command = commands[command]
-  
-  start_package = b'\xab\xcd'
-  # Create the payload part of the package
-  payload_buffer = bytearray()
-  payload_buffer.extend(start_package)
-  # We add 1 to the length of the command to include this byte
-  payload_length = (len(payload_command) + 1).to_bytes()
-  payload_buffer.extend(payload_length)
-  payload_buffer.extend(payload_command)
-  
-  checksum = sum(payload_length + payload_command).to_bytes(2, 'little')
-  payload_buffer.extend(checksum)
+    device.write(package_buffer)
 
-  # Create the complete package
-  package_buffer = bytearray()
-  package_buffer.extend(len(payload_buffer).to_bytes())
-  package_buffer.extend(payload_buffer)
+  def log_handler(self, package, package_no, debug):
+    data = self.parse_package(package, debug)
+    if (data):
+      data['no_#'] = f'{package_no:015}'
+      data['timestamp'] = datetime.datetime.now().isoformat()
+      data.move_to_end('no_#', False)
+      if package_no == 0:
+        print(','.join(data.keys()))
+      print(','.join([str(x) for x in data.values()]))
+      return True
+    
+    return False
 
-  device.write(package_buffer)
-
-def log(package, package_no, debug):
-  data = parse_package(package, debug)
-  if (data):
-    data['no_#'] = f'{package_no:015}'
-    data['timestamp'] = datetime.datetime.now().isoformat()
-    data.move_to_end('no_#', False)
-    if package_no == 0:
-      print(','.join(data.keys()))
-    print(','.join([str(x) for x in data.values()]))
+  def dump_handler(package, package_no, debug):
+    print(f'{package_no:015} | {package.hex()}')
     return True
-  
-  return False
 
-def dump(package, package_no, debug):
-  print(f'{package_no:015} | {package.hex()}')
-  return True
+  def read_packages(device, handler, debug=False):
+    package_no = 0
+    buf = bytearray()
+    while (True):
+      rv = device.read(63)
+      if (len(rv) > 0):
+        for b in rv:
+          if (b == 0xab):
+            if (len(buf) > 0):
+              if (handler(buf, package_no, debug)):
+                package_no += 1
+              buf = bytearray()
+          buf.append(b)
 
-def read_packages(device, handler, debug=False):
-  package_no = 0
-  buf = bytearray()
-  while (True):
-    rv = device.read(63)
-    if (len(rv) > 0):
-      for b in rv:
-        if (b == 0xab):
-          if (len(buf) > 0):
-            if (handler(buf, package_no, debug)):
-              package_no += 1
-            buf = bytearray()
-        buf.append(b)
+  def log(self, debug):
+    self.read_packages(self.device, self.log_handler, debug)
+
+  def dump(self, debug):
+    self.read_packages(self.device, self.dump_handler, debug)
+
+  def connect(self, debug=False):
+    # This will raise an exception if a device is not found. Called with no
+    # parameters, this looks for the default (VID, PID) of the CP2110, which are
+    # (0x10c4, 0xEA80).
+    try:
+      d = cp2110.CP2110Device()
+      d.set_uart_config(cp2110.UARTConfig(
+        baud=9600,
+        parity=cp2110.PARITY.NONE,
+        flow_control=cp2110.FLOW_CONTROL.DISABLED,
+        data_bits=cp2110.DATA_BITS.EIGHT,
+        stop_bits=cp2110.STOP_BITS.SHORT)
+      )
+      d.enable_uart()
+      if debug:
+        print(f'Device: {d}')
+    except Exception as e:
+      print(f'Exception: {e}', file=sys.stderr)
+      print(traceback.format_exc(), file=sys.stderr)
+
+  def disconnect(self):
+    self.send_request(self.device, 'disconnect')
 
 @click.command()
 @click.argument('cmd', required=True, type=click.Choice(['log', 'dump']))
 @click.option('--debug', '-d', default=False)
 def main(cmd, debug):
-  # This will raise an exception if a device is not found. Called with no
-  # parameters, this looks for the default (VID, PID) of the CP2110, which are
-  # (0x10c4, 0xEA80).
+  meter = UT8804e()
+  
   try:
-    d = cp2110.CP2110Device()
-    d.set_uart_config(cp2110.UARTConfig(
-      baud=9600,
-      parity=cp2110.PARITY.NONE,
-      flow_control=cp2110.FLOW_CONTROL.DISABLED,
-      data_bits=cp2110.DATA_BITS.EIGHT,
-      stop_bits=cp2110.STOP_BITS.SHORT)
-    )
-    d.enable_uart()
-    if debug:
-      print(f'Device: {d}')
-      print('Sending connect request')
-    send_request(d, 'connect')
-    time.sleep(1)
-    
+    meter.connect()
+
     if cmd == 'log':
-      read_packages(d, log, debug)
+        meter.log(debug)
     elif cmd == 'dump':
-      read_packages(d, dump, debug)
+      meter.dump(debug)
     else:
       sys.exit('Unknown command')
-
-  except Exception as e:
-    print(f'Exception: {e}', file=sys.stderr)
-    print(traceback.format_exc(), file=sys.stderr)
+  except KeyboardInterrupt:
+      print('Interrupted', file=sys.stderr)
+      meter.disconnect()
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-      if d:
-        print('Sending disconnect request', file=sys.stderr)
-        send_request(d, 'disconnect')
+    main()
