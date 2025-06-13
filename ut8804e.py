@@ -49,7 +49,11 @@ class UT8804e:
 
     float_value = struct.unpack('f', value_as_float)[0]
     return f'{float_value:.4f}'
+  
+  def __init__(self):
+    self.device = None
 
+  @staticmethod
   def add_measurement(value_bytes, duration_bytes, data, measurement_name):
     data[measurement_name] = UT8804e.convert_bytes_float(value_bytes)
     seconds = int.from_bytes(duration_bytes, 'little')
@@ -151,11 +155,11 @@ class UT8804e:
     print(f'{package_no:015} | {package.hex()}')
     return True
 
-  def read_packages(device, handler, debug=False):
+  def read_packages(self, handler, debug=False):
     package_no = 0
     buf = bytearray()
     while (True):
-      rv = device.read(63)
+      rv = self.device.read(63)
       if (len(rv) > 0):
         for b in rv:
           if (b == 0xab):
@@ -176,17 +180,17 @@ class UT8804e:
     # parameters, this looks for the default (VID, PID) of the CP2110, which are
     # (0x10c4, 0xEA80).
     try:
-      d = cp2110.CP2110Device()
-      d.set_uart_config(cp2110.UARTConfig(
+      self.device = cp2110.CP2110Device()
+      self.device.set_uart_config(cp2110.UARTConfig(
         baud=9600,
         parity=cp2110.PARITY.NONE,
         flow_control=cp2110.FLOW_CONTROL.DISABLED,
         data_bits=cp2110.DATA_BITS.EIGHT,
         stop_bits=cp2110.STOP_BITS.SHORT)
       )
-      d.enable_uart()
+      self.device.enable_uart()
       if debug:
-        print(f'Device: {d}')
+        print(f'Device: {self.device}')
     except Exception as e:
       print(f'Exception: {e}', file=sys.stderr)
       print(traceback.format_exc(), file=sys.stderr)
