@@ -12,11 +12,11 @@ class RunningAverage():
   def __init__(self):
     self.average = 0
     self.n = 0
-    
+
   def __call__(self, new_value):
     self.n += 1
     self.average = (self.average * (self.n-1) + new_value) / self.n 
-    
+
   def __float__(self):
     return self.average
 
@@ -91,7 +91,7 @@ class UT8804e:
         print(f'Unknown package: Content: {package} ({package.hex()})', file=sys.stderr)
 
         return False
-      
+
       length_from_package = int(package[2])
       if length_from_package != len(package) - 4:
         print(f'Length mismatch: {length_from_package} != {len(package)}', file=sys.stderr)
@@ -108,7 +108,7 @@ class UT8804e:
         self.__packages.append(self.__current_data)
         if (self.__debug):
           print(f'Stored {len(self.__packages)} packages', file=sys.stderr)
-      
+
       self.__current_data = OrderedDict()
       self.__current_data['no_#'] = f'{self.__package_no:015}'
 
@@ -171,13 +171,13 @@ class UT8804e:
         print(','.join(self.__current_data.keys()))
       print(','.join([str(x) for x in self.__current_data.values()]))
       return True
-    
+
     return False
 
   def dump_handler(self, package):
     print(f'{self.__package_no:015} | {package.hex()}')
     return True
-  
+
   def stat_handler(self, package):
     result = self.parse_package(package)
     if (result):
@@ -203,6 +203,7 @@ class UT8804e:
 
       print(f'Read: {self.__current_data["value_1"]}, Min: {self.__measurements["min"]}, Max: {self.__measurements["max"]}, Avg: {self.__measurements["avg"]}')
       return True
+    return False
 
   def read_packages(self, handler):
     buf = bytearray()
@@ -259,7 +260,7 @@ class UT8804e:
 @click.option('--debug', '-d', is_flag=True)
 def main(cmd, debug):
   meter = UT8804e(debug)
-  
+
   try:
     meter.connect()
 
