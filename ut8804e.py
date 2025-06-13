@@ -209,7 +209,7 @@ class UT8804e:
 
 @click.command()
 @click.argument('cmd', required=True, type=click.Choice(['log', 'dump']))
-@click.option('--debug', '-d', default=False)
+@click.option('--debug', '-d', is_flag=True)
 def main(cmd, debug):
   meter = UT8804e(debug)
   
