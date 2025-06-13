@@ -62,9 +62,9 @@ class UT8804e:
 
   def parse_package(self, package, debug=False):
     if debug:
-      print(f'Package: {len(package)} bytes')
-      print(f'Package hex: {package.hex()}')
-      print(f'Package: {package}')
+      print(f'Package: {len(package)} bytes', file=sys.stderr)
+      print(f'Package hex: {package.hex()}', file=sys.stderr)
+      print(f'Package: {package}', file=sys.stderr)
 
     try:
       if not (package[0] == 0xab and package[1] == 0xcd):
@@ -180,7 +180,7 @@ class UT8804e:
     # This will raise an exception if a device is not found. Called with no
     # parameters, this looks for the default (VID, PID) of the CP2110, which are
     # (0x10c4, 0xEA80).
-    print('Connecting')
+    print('Connecting', file=sys.stderr)
     try:
       self.device = cp2110.CP2110Device()
       self.device.set_uart_config(cp2110.UARTConfig(
@@ -192,7 +192,7 @@ class UT8804e:
       )
       self.device.enable_uart()
       if debug:
-        print(f'Device: {self.device}')
+        print(f'Device: {self.device}', file=sys.stderr)
 
       self.send_request(self.device, 'connect')
 
