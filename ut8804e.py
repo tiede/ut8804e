@@ -1,6 +1,4 @@
-from statistics import stdev
 import cp2110
-import time
 import traceback
 import struct
 import click
@@ -247,7 +245,6 @@ class UT8804e:
 
       self.send_request(self.__device, 'connect')
 
-      time.sleep(1)
     except Exception as e:
       print(f'Exception: {e}', file=sys.stderr)
       print(traceback.format_exc(), file=sys.stderr)
